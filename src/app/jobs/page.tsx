@@ -350,11 +350,9 @@ export default function JobsPage() {
                     />
                 </div>
                 <DropdownMenu>
-                    <DropdownMenuTrigger>
-                        <Button variant="outline" size="sm" className="h-10 px-4 bg-white shadow-sm font-medium">
-                            <Filter className="mr-2 h-4 w-4 text-slate-500" /> 
-                            {statusFilter === "ALL" ? "Filter Options" : `Status: ${statusFilter}`}
-                        </Button>
+                    <DropdownMenuTrigger className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input h-10 px-4 py-2 bg-white shadow-sm hover:bg-slate-50 text-slate-900">
+                        <Filter className="mr-2 h-4 w-4 text-slate-500" /> 
+                        {statusFilter === "ALL" ? "Filter Options" : `Status: ${statusFilter}`}
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 p-1 rounded-lg">
                         <DropdownMenuItem onClick={() => setStatusFilter("ALL")} className="text-xs cursor-pointer rounded-md py-2">
