@@ -1,0 +1,105 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "3030:3000"
+    environment:
+      - DATABASE_URL=postgresql://datasync_user:datasync_password@db:5432/datasync_db
+      - REDIS_URL=redis://redis:6379
+      - NODE_ENV=development
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: datasync_user
+      POSTGRES_PASSWORD: datasync_password
+      POSTGRES_DB: datasync_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datasync_user -d datasync_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  db_source:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: source_user
+      POSTGRES_PASSWORD: source_password
+      POSTGRES_DB: source_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U source_user -d source_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5434:5432"
+    volumes:
+      - sourcedata:/var/lib/postgresql/data
+
+  db_dest:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: dest_user
+      POSTGRES_PASSWORD: dest_password
+      POSTGRES_DB: dest_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dest_user -d dest_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5435:5432"
+    volumes:
+      - destdata:/var/lib/postgresql/data
+
+  mysql_source:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: mysql_source_db
+      MYSQL_USER: source_user
+      MYSQL_PASSWORD: source_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysqlsourcedata:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  redisdata:
+  sourcedata:
+  destdata:
+  mysqlsourcedata:

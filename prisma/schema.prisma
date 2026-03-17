@@ -1,0 +1,242 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-arm64-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Workspace {
+  id          String          @id @default(cuid())
+  name        String
+  slug        String          @unique
+  createdAt   DateTime        @default(now())
+  connections Connection[]
+  models      Model[]
+  syncs       Sync[]
+  users       WorkspaceUser[]
+}
+
+model WorkspaceUser {
+  id          String    @id @default(cuid())
+  workspaceId String
+  userId      String
+  role        UserRole  @default(VIEWER)
+  createdAt   DateTime  @default(now())
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  @@unique([workspaceId, userId])
+}
+
+model Connection {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  name         String
+  type         ConnectionType
+  role         ConnectionRole
+  host         String
+  port         Int
+  database     String
+  username     String
+  passwordEnc  String
+  sslMode      String?
+  sshEnabled   Boolean        @default(false)
+  sshHost      String?
+  sshPort      Int?
+  sshUser      String?
+  sshKeyEnc    String?
+  status       ConnStatus
+  lastTestedAt DateTime?
+  lastError    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  workspace    Workspace      @relation(fields: [workspaceId], references: [id])
+  models       Model[]
+  syncs        Sync[]         @relation("SyncDestination")
+}
+
+model Model {
+  id                  String            @id @default(cuid())
+  workspaceId         String
+  name                String
+  description         String?
+  tags                String[]
+  sourceConnId        String
+  sourceType          SourceType
+  sourceSchema        String?
+  sourceName          String?
+  customSql           String?
+  detectedColumns     Json?
+  lastSchemaCheckedAt DateTime?
+  schemaStatus        SchemaStatus      @default(UNKNOWN)
+  status              ModelStatus       @default(DRAFT)
+  ownerId             String?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  sourceConn          Connection        @relation(fields: [sourceConnId], references: [id])
+  workspace           Workspace         @relation(fields: [workspaceId], references: [id])
+  dependents          ModelDependency[] @relation("dependent")
+  dependencies        ModelDependency[] @relation("model")
+  syncs               Sync[]
+}
+
+model ModelDependency {
+  id          String   @id @default(cuid())
+  modelId     String
+  dependentId String
+  autoSync    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  dependent   Model    @relation("dependent", fields: [dependentId], references: [id])
+  model       Model    @relation("model", fields: [modelId], references: [id])
+
+  @@unique([modelId, dependentId])
+}
+
+model Sync {
+  id                  String              @id @default(cuid())
+  workspaceId         String
+  modelId             String
+  name                String
+  destConnId          String
+  destSchema          String              @default("public")
+  destName            String
+  syncMode            SyncMode            @default(FULL_REFRESH)
+  incrementalCol      String?
+  status              SyncStatus          @default(ACTIVE)
+  schedule            String?
+  scheduleEnabled     Boolean             @default(false)
+  timezone            String              @default("UTC")
+  lastRunAt           DateTime?
+  lastRunStatus       RunStatus?
+  nextRunAt           DateTime?
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  fullRefreshStrategy FullRefreshStrategy @default(TRUNCATE)
+  destObjects         DestObject[]
+  destConn            Connection          @relation("SyncDestination", fields: [destConnId], references: [id])
+  model               Model               @relation(fields: [modelId], references: [id])
+  workspace           Workspace           @relation(fields: [workspaceId], references: [id])
+  runs                SyncRun[]
+}
+
+model SyncRun {
+  id               String    @id @default(cuid())
+  syncId           String
+  status           RunStatus
+  triggeredBy      TriggerBy
+  startedAt        DateTime  @default(now())
+  finishedAt       DateTime?
+  durationMs       Int?
+  rowsProcessed    Int?
+  bytesTransferred Int?
+  errorMessage     String?
+  logOutput        String?
+  syncPlan         Json?
+  sync             Sync      @relation(fields: [syncId], references: [id])
+}
+
+model DestObject {
+  id           String         @id @default(cuid())
+  workspaceId  String
+  connId       String
+  schema       String
+  name         String
+  objectType   DestObjectType
+  ownership    Ownership
+  definition   String?
+  syncId       String?
+  lastSyncedAt DateTime?
+  sync         Sync?          @relation(fields: [syncId], references: [id])
+
+  @@unique([connId, schema, name])
+}
+
+enum UserRole {
+  ADMIN
+  EDITOR
+  VIEWER
+}
+
+enum ConnectionType {
+  POSTGRES
+  MYSQL
+}
+
+enum ConnectionRole {
+  SOURCE
+  DESTINATION
+  BOTH
+}
+
+enum ConnStatus {
+  ACTIVE
+  ERROR
+  TESTING
+  DISABLED
+}
+
+enum SourceType {
+  TABLE
+  VIEW
+  MATVIEW
+  CUSTOM_SQL
+}
+
+enum ModelStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+enum SchemaStatus {
+  UNKNOWN
+  SYNCED
+  DRIFTED
+  ERROR
+}
+
+enum SyncMode {
+  FULL_REFRESH
+  INCREMENTAL
+}
+
+enum FullRefreshStrategy {
+  DROP
+  TRUNCATE
+}
+
+enum SyncStatus {
+  ACTIVE
+  PAUSED
+  DRAFT
+  ERROR
+  DISABLED
+}
+
+enum RunStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+enum TriggerBy {
+  MANUAL
+  SCHEDULER
+  API
+}
+
+enum DestObjectType {
+  TABLE
+  VIEW
+  MATVIEW
+}
+
+enum Ownership {
+  MANAGED
+  USER_CREATED
+}

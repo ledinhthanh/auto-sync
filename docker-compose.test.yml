@@ -1,0 +1,87 @@
+services:
+  db_test:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: datasync_user
+      POSTGRES_PASSWORD: datasync_password
+      POSTGRES_DB: datasync_db_test
+    ports:
+      - "5443:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datasync_user -d datasync_db_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis_test:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6389:6379"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  db_source_test:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: source_user
+      POSTGRES_PASSWORD: source_password
+      POSTGRES_DB: source_db_test
+    ports:
+      - "5444:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U source_user -d source_db_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - ./tests/fixtures/init-source.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+  db_dest_test:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: dest_user
+      POSTGRES_PASSWORD: dest_password
+      POSTGRES_DB: dest_db_test
+    ports:
+      - "5445:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dest_user -d dest_db_test"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mysql_source_test:
+    image: mysql:8.0
+    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: mysql_source_test
+      MYSQL_USER: source_user
+      MYSQL_PASSWORD: source_password
+    ports:
+      - "3306:3306"
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - ./tests/fixtures/init-mysql-source.sql:/docker-entrypoint-initdb.d/init.sql:ro
