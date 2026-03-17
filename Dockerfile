@@ -23,5 +23,5 @@ ENV PORT=3000
 
 EXPOSE 3000
 
-# Next.js dev server
-CMD ["npm", "run", "dev"]
+# Ensure schema exists before app startup (important on fresh DBs)
+CMD ["sh", "-c", "npx prisma db push && npm run dev"]
