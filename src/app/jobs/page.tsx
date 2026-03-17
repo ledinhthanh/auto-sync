@@ -134,7 +134,8 @@ export default function JobsPage() {
             job.destName.toLowerCase().includes(search.toLowerCase()) ||
             job.model?.name.toLowerCase().includes(search.toLowerCase());
         
-        const matchesStatus = statusFilter === "ALL" || job.status === statusFilter;
+        const matchesStatus = statusFilter === "ALL" || 
+            (statusFilter === "NEVER_RUN" ? !job.lastRunAt : job.status === statusFilter);
         
         return matchesSearch && matchesStatus;
     });
@@ -358,6 +359,9 @@ export default function JobsPage() {
                     <DropdownMenuContent align="end" className="w-48 p-1 rounded-lg">
                         <DropdownMenuItem onClick={() => setStatusFilter("ALL")} className="text-xs cursor-pointer rounded-md py-2">
                             All Statuses
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatusFilter("NEVER_RUN")} className="text-xs cursor-pointer rounded-md py-2 text-indigo-600 font-bold">
+                            <Clock className="h-3.5 w-3.5 mr-2" /> Never Run
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="bg-slate-100" />
                         <DropdownMenuItem onClick={() => setStatusFilter("ACTIVE")} className="text-xs cursor-pointer rounded-md py-2">
