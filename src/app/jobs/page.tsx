@@ -32,6 +32,7 @@ export default function JobsPage() {
     const [jobs, setJobs] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
+    const [statusFilter, setStatusFilter] = useState<string>("ALL");
     const [syncingId, setSyncingId] = useState<string | null>(null);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isProcessingBulk, setIsProcessingBulk] = useState(false);
@@ -128,11 +129,15 @@ export default function JobsPage() {
         }
     }, [jobs, fetchJobs]);
 
-    const filteredJobs = jobs.filter(job => 
-        job.name.toLowerCase().includes(search.toLowerCase()) || 
-        job.destName.toLowerCase().includes(search.toLowerCase()) ||
-        job.model?.name.toLowerCase().includes(search.toLowerCase())
-    );
+    const filteredJobs = jobs.filter(job => {
+        const matchesSearch = job.name.toLowerCase().includes(search.toLowerCase()) || 
+            job.destName.toLowerCase().includes(search.toLowerCase()) ||
+            job.model?.name.toLowerCase().includes(search.toLowerCase());
+        
+        const matchesStatus = statusFilter === "ALL" || job.status === statusFilter;
+        
+        return matchesSearch && matchesStatus;
+    });
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
@@ -181,20 +186,58 @@ export default function JobsPage() {
     const handleBulkSync = async () => {
         if (selectedIds.length === 0) return;
         setIsProcessingBulk(true);
-        toast.info(`Triggering ${selectedIds.length} jobs...`);
+        toast.info(`Triggering ${selectedIds.length} jobs (max 3 concurrent)...`);
         
         try {
             setJobs(prevJobs => prevJobs.map(job => 
                 selectedIds.includes(job.id) ? { ...job, status: 'RUNNING' } : job
             ));
 
-            const results = await Promise.allSettled(
-                selectedIds.map(id => fetch(`/api/syncs/${id}/run`, { method: 'POST' }))
-            );
+            const queue = [...selectedIds];
+            const maxConcurrency = 3;
+            let activeCount = 0;
+            let completedCount = 0;
+            let errorCount = 0;
 
-            const errors = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.ok));
-            if (errors.length > 0) {
-                toast.error(`Triggered with ${errors.length} errors`);
+            const processQueue = async () => {
+                while (queue.length > 0) {
+                    if (activeCount < maxConcurrency) {
+                        const id = queue.shift();
+                        if (!id) break;
+                        
+                        activeCount++;
+                        (async () => {
+                            try {
+                                const res = await fetch(`/api/syncs/${id}/run`, { method: 'POST' });
+                                if (!res.ok) throw new Error("Failed");
+                                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                            } catch (e) {
+                                errorCount++;
+                            } finally {
+                                activeCount--;
+                                completedCount++;
+                                processQueue();
+                            }
+                        })();
+                    } else {
+                        break;
+                    }
+                }
+            };
+
+            // Start initial workers
+            const initialWorkers = [];
+            for (let i = 0; i < Math.min(queue.length, maxConcurrency); i++) {
+                initialWorkers.push(processQueue());
+            }
+
+            // Wait until all are completed
+            while (completedCount < selectedIds.length) {
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
+            if (errorCount > 0) {
+                toast.error(`Completed with ${errorCount} errors`);
             } else {
                 toast.success(`Successfully triggered ${selectedIds.length} jobs`);
                 setSelectedIds([]);
@@ -305,9 +348,35 @@ export default function JobsPage() {
                         className="pl-9 h-10 border-slate-200 bg-white"
                     />
                 </div>
-                <Button variant="outline" size="sm" className="h-10 px-4 bg-white shadow-sm font-medium">
-                    <Filter className="mr-2 h-4 w-4 text-slate-500" /> Filter Options
-                </Button>
+                <DropdownMenu>
+                    <DropdownMenuTrigger>
+                        <Button variant="outline" size="sm" className="h-10 px-4 bg-white shadow-sm font-medium">
+                            <Filter className="mr-2 h-4 w-4 text-slate-500" /> 
+                            {statusFilter === "ALL" ? "Filter Options" : `Status: ${statusFilter}`}
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 p-1 rounded-lg">
+                        <DropdownMenuItem onClick={() => setStatusFilter("ALL")} className="text-xs cursor-pointer rounded-md py-2">
+                            All Statuses
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator className="bg-slate-100" />
+                        <DropdownMenuItem onClick={() => setStatusFilter("ACTIVE")} className="text-xs cursor-pointer rounded-md py-2">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 mr-2"></span> Active
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatusFilter("PAUSED")} className="text-xs cursor-pointer rounded-md py-2">
+                            <span className="h-2 w-2 rounded-full bg-slate-400 mr-2"></span> Paused
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatusFilter("RUNNING")} className="text-xs cursor-pointer rounded-md py-2">
+                            <span className="h-2 w-2 rounded-full bg-blue-500 mr-2"></span> Running
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatusFilter("ERROR")} className="text-xs cursor-pointer rounded-md py-2">
+                            <span className="h-2 w-2 rounded-full bg-red-500 mr-2"></span> Error
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => setStatusFilter("DRAFT")} className="text-xs cursor-pointer rounded-md py-2">
+                            <span className="h-2 w-2 rounded-full bg-amber-500 mr-2"></span> Draft
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
 
             <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden min-h-[400px]">
