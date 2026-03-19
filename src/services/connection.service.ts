@@ -410,7 +410,7 @@ export async function detectSchema(
     
     let sql = '';
     if ('sql' in input) {
-      sql = input.sql;
+      sql = `SELECT * FROM (${input.sql}) AS _detect LIMIT 0`;
     } else {
       sql = `SELECT * FROM \`${input.schema}\`.\`${input.table}\` LIMIT 0`;
     }

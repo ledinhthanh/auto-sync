@@ -585,6 +585,39 @@ async function syncViaCopyPipe(
     try {
       await log('info', `Phase 1/3: Backing up source data to temporary file...`);
       
+      let actualSelectSql = selectSql;
+      if (!isMysql && dest.type === 'POSTGRES') {
+        // For Postgres -> Postgres BINARY copy, we need to cast JSON to TEXT if destination is string-like
+        // because binary formats for JSON and TEXT are incompatible.
+        try {
+          const destDetection = await detectSchema(dest.id, { schema: destSchema, table: destName });
+          const destMap = new Map(destDetection.columns.map(c => [c.name.toLowerCase(), (c.udtName || c.type).toLowerCase()]));
+          const stringTypes = ['text', 'varchar', 'bpchar', 'character varying', 'char'];
+          
+          const casts: string[] = [];
+          let needsCast = false;
+          
+          for (const col of schemaColumns) {
+            const sType = (col.udtName || col.type).toLowerCase();
+            const dType = destMap.get(col.name.toLowerCase());
+            
+            if (dType && (sType === 'json' || sType === 'jsonb') && stringTypes.includes(dType)) {
+              casts.push(`"${col.name}"::text AS "${col.name}"`);
+              needsCast = true;
+            } else {
+              casts.push(`"${col.name}"`);
+            }
+          }
+          
+          if (needsCast) {
+            actualSelectSql = `SELECT ${casts.join(', ')} FROM (${selectSql}) AS _sync_cast`;
+            await log('info', `Detected JSON -> String mapping. Applied explicit ::text casts for compatibility.`);
+          }
+        } catch (err: any) {
+          await log('debug', `Destination schema detection skipped for casting: ${err.message}`);
+        }
+      }
+
       const srcCommand = isMysql ? 'mysql' : 'psql';
       const srcArgs = isMysql 
         ? [
@@ -598,7 +631,7 @@ async function syncViaCopyPipe(
         : [
             '-h', source.host, '-p', String(source.port),
             '-U', source.username, '-d', source.database,
-            '-c', `COPY (${selectSql}) TO STDOUT WITH BINARY`,
+            '-c', `COPY (${actualSelectSql}) TO STDOUT WITH BINARY`,
           ];
 
       const actualSrcProc = spawn(srcCommand, srcArgs, { env: { ...process.env, PGPASSWORD: srcPass } });

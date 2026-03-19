@@ -169,6 +169,10 @@ function isTypeCompatible(source: string, dest: string): boolean {
   const string = ['text', 'varchar', 'bpchar']; 
   if (string.includes(s) && string.includes(d)) return true;
 
+  // JSON -> String compatibility (text serialization)
+  const json = ['json', 'jsonb'];
+  if (json.includes(s) && string.includes(d)) return true;
+
   // UUID, JSON, JSONB, and individual numeric types are NOT binary compatible with each other.
   // Integer types (int2, int4, int8) are NOT binary compatible with each other.
   // float4 and float8 are NOT binary compatible with each other.
