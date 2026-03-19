@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import prisma from '../../../src/lib/db';
-import { detectSchema } from '../../../src/services/connection.service';
+import { detectSchema, previewData } from '../../../src/services/connection.service';
 import { encryptCredential } from '../../../src/lib/crypto';
 import { ConnectionType } from '@prisma/client';
 import { getMySQLPool } from '../../../src/lib/mysql-client';
@@ -62,6 +62,23 @@ describe('connection.service - MySQL SQL Query Schema Detection', () => {
     // we check that it doesn't crash)
     const idCol = result.columns.find(c => c.name === 'id');
     expect(idCol).toBeDefined();
+  });
+
+  it('should preview data for a custom SQL query in MySQL', async () => {
+    const sql = 'SELECT id, val FROM test_sql_detect WHERE id > 0';
+    const result = await previewData(connId, { sql });
+    
+    expect(result.rows).toHaveLength(2);
+    expect(result.columns).toHaveLength(2);
+    expect(result.rows[0].val).toBe('test1');
+  });
+
+  it('should preview data for a MySQL table', async () => {
+    const result = await previewData(connId, { schema: 'mysql_source_test', name: 'test_sql_detect' });
+    
+    expect(result.rows).toHaveLength(2);
+    expect(result.columns.map(c => c.name)).toContain('val');
+    expect(result.rows[0].val).toBe('test1');
   });
 
   it('should detect schema for a complex SQL query with joins in MySQL', async () => {

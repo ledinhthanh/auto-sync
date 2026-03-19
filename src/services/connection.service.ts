@@ -335,6 +335,55 @@ export async function previewData(
     console.warn(`[SECURITY] Read-only check: previewData called on SOURCE connection ${connId}`);
   }
 
+  if (conn.type === 'MYSQL') {
+    const pool = await getMySQLPool(connId, {
+      host: conn.host,
+      port: conn.port,
+      database: conn.database,
+      user: conn.username,
+      passwordEnc: decryptCredential(conn.passwordEnc), // decrypt here since previewData is high-level
+      sslMode: conn.sslMode,
+    });
+
+    let querySql = '';
+    if ('sql' in input) {
+      validateSelectOnly(input.sql);
+      querySql = `SELECT * FROM (${input.sql}) AS _preview LIMIT 50`;
+    } else {
+      querySql = `SELECT * FROM \`${input.schema}\`.\`${input.name}\` LIMIT 50`;
+    }
+
+    try {
+      const t0 = Date.now();
+      const [rows, fields] = await pool.query({ sql: querySql, rowsAsArray: false });
+      const executionMs = Date.now() - t0;
+
+      const columns: ColumnDef[] = (fields as any[]).map((f, i) => ({
+        name: f.name,
+        type: 'text', // Fallback as MySQL2 doesn't expose clean type names easily here
+        udtName: 'text',
+        nullable: true,
+        ordinalPosition: i + 1,
+        maxLength: null,
+        numericPrecision: null,
+        numericScale: null,
+        isArray: false
+      }));
+
+      return {
+        columns,
+        rows: rows as Record<string, unknown>[],
+        rowCount: (rows as any[]).length,
+        totalEstimate: -1,
+        executionMs,
+        truncated: (rows as any[]).length === 50
+      };
+    } catch (err) {
+      throw err;
+    }
+  }
+
+  // PostgreSQL logic (default)
   const resolved = await resolveConnForPool(connId);
   const client = await getPooledClient(connId, resolved);
   
