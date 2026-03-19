@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  serverExternalPackages: ['ssh2', 'node-ssh'],
+};
 
 export default nextConfig;
