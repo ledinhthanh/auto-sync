@@ -71,7 +71,7 @@ export function ModelForm({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [previewData, setPreviewData] = useState<any>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [isPreviewed, setIsPreviewed] = useState(false);
+  const [isPreviewed, setIsPreviewed] = useState(!!editingId);
   const [openSelector, setOpenSelector] = useState(false);
 
   useEffect(() => {
@@ -164,6 +164,11 @@ export function ModelForm({
 
   const handleChange = <K extends keyof ModelFormData>(field: K, value: ModelFormData[K]) => {
     setFormData({ ...formData, [field]: value });
+    
+    // Reset preview status if source definition changes
+    if (["sourceConnId", "sourceType", "sourceSchema", "sourceName", "customSql"].includes(field)) {
+        setIsPreviewed(false);
+    }
   };
 
    const nextStep = () => {
@@ -193,8 +198,19 @@ export function ModelForm({
       {/* Progress Header */}
       <div className="flex items-center justify-between px-2">
         {steps.map((step, i) => (
-          <div key={i} className="flex items-center group">
-            <div className={`flex flex-col items-center gap-1.5`}>
+          <div key={i} className="flex items-center group flex-1 last:flex-none">
+            <button 
+                type="button"
+                onClick={() => {
+                    if (editingId || currentStep > i + 1) {
+                        setCurrentStep(i + 1);
+                    }
+                }}
+                className={cn(
+                    "flex flex-col items-center gap-1.5 transition-all outline-none",
+                    (editingId || currentStep > i + 1) ? "cursor-pointer hover:opacity-80" : "cursor-default"
+                )}
+            >
               <div 
                 className={`h-8 w-8 rounded-full flex items-center justify-center border transition-all duration-300 ${
                   currentStep > i + 1 
@@ -206,10 +222,10 @@ export function ModelForm({
               >
                 {currentStep > i + 1 ? <Check className="h-4 w-4" /> : <step.icon className="h-4 w-4" />}
               </div>
-              <span className={`text-[10px] font-bold uppercase tracking-widest ${currentStep === i + 1 ? "text-slate-900" : "text-slate-400"}`}>
+              <span className={`text-[10px] font-bold uppercase tracking-widest transition-colors ${currentStep === i + 1 ? "text-slate-900" : "text-slate-400"}`}>
                 {step.title}
               </span>
-            </div>
+            </button>
             {i < steps.length - 1 && (
               <div className={`flex-1 h-px mx-4 mb-4 transition-colors duration-500 ${currentStep > i + 1 ? "bg-emerald-500" : "bg-slate-100"}`} />
             )}
